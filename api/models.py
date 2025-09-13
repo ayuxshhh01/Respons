@@ -6,6 +6,7 @@ class CustomUser(AbstractUser):
     emergency_contact = models.CharField(max_length=15, blank=True)
     safety_score = models.IntegerField(default=90)
     blockchain_id = models.CharField(max_length=100, blank=True)
+    last_location_update = models.DateTimeField(null=True, blank=True)
 
     def __str__(self):
         return self.username
