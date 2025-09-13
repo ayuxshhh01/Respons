@@ -26,3 +26,24 @@ class Alert(models.Model):
 
     def __str__(self):
         return f"{self.alert_type} for {self.user.username} at {self.timestamp}"
+    
+
+
+
+class GeoZone(models.Model):
+    name = models.CharField(max_length=100)
+    # For "dangerous/restricted areas".
+    zone_type = models.CharField(max_length=50, default='High-Risk') 
+    center_lat = models.FloatField()
+    center_lon = models.FloatField()
+    radius_km = models.FloatField()
+
+    def __str__(self):
+        return self.name
+    
+
+
+class Itinerary(models.Model):
+    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
+    # Stores the output of the "Smart itinerary planner".
+    plan_data = models.JSONField()

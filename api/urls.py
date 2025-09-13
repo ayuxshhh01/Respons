@@ -10,4 +10,5 @@ urlpatterns = [
   path('location/update/', UpdateLocationView.as_view(), name='update-location'),
   path('alerts/panic/', PanicAlertView.as_view(), name='panic-alert'),
   path('dashboard/data/', DashboardDataView.as_view(), name='dashboard-data'),
+  path('itinerary/', ItineraryView.as_view(), name='itinerary'),
 ]

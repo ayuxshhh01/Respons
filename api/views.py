@@ -96,7 +96,20 @@ class RegisterView(generics.CreateAPIView):
     queryset = CustomUser.objects.all()
     serializer_class = UserSerializer
 
-
+def check_geofence(lat, lon):
+    
+    all_zones = GeoZone.objects.all()
+    for zone in all_zones:
+        
+        R = 6371 
+        dLat = (lat - zone.center_lat) * math.pi / 180
+        dLon = (lon - zone.center_lon) * math.pi / 180
+        a = math.sin(dLat/2) * math.sin(dLat/2) + math.cos(zone.center_lat * math.pi / 180) * math.cos(lat * math.pi / 180) * math.sin(dLon/2) * math.sin(dLon/2)
+        c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
+        distance = R * c
+        if distance < zone.radius_km:
+            return True 
+    return False
 
 
 #view for realtime location
@@ -104,11 +117,28 @@ class UpdateLocationView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
+        user = request.user
         serializer = LocationSerializer(data=request.data)
         if serializer.is_valid():
-           
-            print(f"User {request.user.username} is at {serializer.validated_data}")
-            return Response({"status": "location updated"})
+            now = timezone.now()
+            location = serializer.validated_data
+
+            # --- UPGRADED AI SIMULATION ---
+            # Check for "Prolonged inactivity"
+            if user.last_location_update and now - user.last_location_update > timedelta(hours=1):
+                Alert.objects.create(user=user, alert_type="Inactivity", location=location)
+                print(f"INACTIVITY ALERT for {user.username}")
+
+            # Check for "Geo-fencing Alerts" against the database
+            if check_geofence(location['lat'], location['lon']):
+                Alert.objects.create(user=user, alert_type="GeoFence", location=location)
+                print(f"GEOFENCE ALERT for {user.username}")
+            # --- END OF UPGRADED SIMULATION ---
+
+            user.last_location_update = now
+            user.save()
+
+            return Response({"status": "location updated and checked"})
         return Response(serializer.errors, status=400)
 
 
@@ -152,3 +182,27 @@ class DashboardDataView(generics.ListAPIView):
     permission_classes = [IsAuthenticated]
     queryset = CustomUser.objects.filter(is_staff=False)
     serializer_class = DashboardUserSerializer
+
+
+class ItineraryView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        # For now, we return a hardcoded itinerary.
+        # Later, this can be powered by AI.
+        mock_itinerary = {
+            "destination": "Solapur, Maharashtra",
+            "duration_days": 2,
+            "plan": {
+                "day_1": [
+                    {"time": "10:00 AM", "activity": "Visit Siddheshwar Temple"},
+                    {"time": "01:00 PM", "activity": "Lunch at a local restaurant"},
+                    {"time": "03:00 PM", "activity": "Explore Bhuikot Fort"},
+                ],
+                "day_2": [
+                    {"time": "11:00 AM", "activity": "Day trip to Pandharpur"},
+                    {"time": "06:00 PM", "activity": "Return to Solapur"},
+                ]
+            }
+        }
+        return Response(mock_itinerary)
