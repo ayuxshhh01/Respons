@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  # The Redis message broker
+  redis:
+    image: redis:alpine
+    ports:
+      - "6379:6379"
+
+  # The main Django backend service (for API and WebSockets)
+  backend:
+    build: ./backend
+    command: daphne -b 0.0.0.0 -p 8000 backend.asgi:application
+    volumes:
+      - ./backend:/app
+    ports:
+      - "8000:8000"
+    depends_on:
+      - redis
+
+  # The Celery worker service for background tasks
+  worker:
+    build: ./backend
+    command: celery -A backend worker -l info --pool=solo
+    volumes:
+      - ./backend:/app
+    depends_on:
+      - redis
+      - backend
+
+  # The standalone AI service
+  ai_service:
+    build: ./ai_service
+    command: uvicorn main:app --host 0.0.0.0 --port 8001
+    volumes:
+      - ./ai_service:/app
+    ports:
+      - "8001:8001"

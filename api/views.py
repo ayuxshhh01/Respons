@@ -11,6 +11,7 @@ from asgiref.sync import async_to_sync
 from django.utils import timezone
 from datetime import timedelta
 import math
+from .tasks import analyze_location_for_risks
 
 # # Create your views here.
 # @api_view()
@@ -62,6 +63,7 @@ def is_in_danger_zone(lat, lon):
 # --- END OF SIMULATION LOGIC ---
 
 
+
 class UpdateLocationView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -69,25 +71,19 @@ class UpdateLocationView(APIView):
         user = request.user
         serializer = LocationSerializer(data=request.data)
         if serializer.is_valid():
-            now = timezone.now()
             location = serializer.validated_data
-
-            # --- AI SIMULATION ---
-            # 1. Check for "Prolonged inactivity"
-            if user.last_location_update and now - user.last_location_update > timedelta(hours=1):
-                Alert.objects.create(user=user, alert_type="Inactivity", location=location)
-                print(f"INACTIVITY ALERT for {user.username}")
-
-            # 2. Check for "Geo-fencing Alerts"
-            if is_in_danger_zone(location['lat'], location['lon']):
-                Alert.objects.create(user=user, alert_type="GeoFence", location=location)
-                print(f"GEOFENCE ALERT for {user.username}")
-            # --- END OF AI SIMULATION ---
-
-            user.last_location_update = now
+            
+            # --- CHANGE 2: Call .delay() with simple, separate arguments ---
+            lat = location['lat']
+            lon = location['lon']
+            analyze_location_for_risks.delay(user.id, lat, lon)
+            
+            # ... (your existing logic for inactivity and geofence)
+            
+            user.last_location_update = timezone.now()
             user.save()
 
-            return Response({"status": "location updated and checked"})
+            return Response({"status": "location updated, analysis dispatched"})
         return Response(serializer.errors, status=400)
 
 
@@ -120,25 +116,22 @@ class UpdateLocationView(APIView):
         user = request.user
         serializer = LocationSerializer(data=request.data)
         if serializer.is_valid():
-            now = timezone.now()
             location = serializer.validated_data
 
-            # --- UPGRADED AI SIMULATION ---
-            # Check for "Prolonged inactivity"
-            if user.last_location_update and now - user.last_location_update > timedelta(hours=1):
-                Alert.objects.create(user=user, alert_type="Inactivity", location=location)
-                print(f"INACTIVITY ALERT for {user.username}")
+            print("--- DJANGO VIEW: About to send task to Celery... ---")
 
-            # Check for "Geo-fencing Alerts" against the database
-            if check_geofence(location['lat'], location['lon']):
-                Alert.objects.create(user=user, alert_type="GeoFence", location=location)
-                print(f"GEOFENCE ALERT for {user.username}")
-            # --- END OF UPGRADED SIMULATION ---
+            lat = location['lat']
+            lon = location['lon']
+            analyze_location_for_risks.delay(user.id, lat, lon)
 
-            user.last_location_update = now
+            print("--- DJANGO VIEW: Task was successfully dispatched! ---")
+
+            # ... (your existing logic)
+
+            user.last_location_update = timezone.now()
             user.save()
 
-            return Response({"status": "location updated and checked"})
+            return Response({"status": "location updated, analysis dispatched"})
         return Response(serializer.errors, status=400)
 
 
